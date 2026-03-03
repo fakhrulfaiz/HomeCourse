@@ -2,7 +2,6 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 
-// https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
   resolve: {
@@ -11,13 +10,20 @@ export default defineConfig({
     },
   },
   server: {
-    host: '0.0.0.0', // Allow external connections
+    host: '0.0.0.0',
     port: 5173,
     strictPort: true,
-    hmr: {
-      clientPort: 443, // For ngrok HTTPS
-    },
-    // Disable host check to allow nginx proxy with any hostname
     allowedHosts: ['localhost', '.ngrok-free.dev', '.ngrok.io'],
+    // Proxy /api and /health to the backend — works in both Docker and native dev
+    proxy: {
+      '/api': {
+        target: process.env.BACKEND_URL || 'http://localhost:3000',
+        changeOrigin: true,
+      },
+      '/health': {
+        target: process.env.BACKEND_URL || 'http://localhost:3000',
+        changeOrigin: true,
+      },
+    },
   },
 })

@@ -1,38 +1,49 @@
-# Dependencies
+# ── Dependencies ──────────────────────────────────────────────────────────────
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Environment variables
+# ── Environment variables ──────────────────────────────────────────────────────
 .env
 .env.local
 .env.*.local
 
-# Build outputs
+# ── Build outputs ──────────────────────────────────────────────────────────────
 dist/
 build/
 *.tsbuildinfo
 
-# Storage directories (videos, thumbnails, subtitles)
-storage/
+# ── Test artefacts ─────────────────────────────────────────────────────────────
+coverage/
+*.db          # SQLite test/dev databases (test.db, app.db, etc.)
+*.db-journal
+*.db-shm
+*.db-wal
 
-# Docker volumes
+# ── Docker volumes / local data ────────────────────────────────────────────────
 postgres_data/
 redis_data/
+sqlite_data/
+data/
 
-# IDE
+# ── Storage directories ────────────────────────────────────────────────────────
+storage/
+
+# ── Temporary / export files ───────────────────────────────────────────────────
+temp/
+*.json.bak
+
+# ── IDE ────────────────────────────────────────────────────────────────────────
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 .DS_Store
+Thumbs.db
 
-# Logs
+# ── Logs ───────────────────────────────────────────────────────────────────────
 logs/
 *.log
-
-# OS
-Thumbs.db

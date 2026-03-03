@@ -1,49 +1,43 @@
-import { Router, Request, Response } from 'express';
+import { Router, Response } from 'express';
 import prisma from '../lib/prisma';
+import { config } from '../config';
+import { authenticate, AuthRequest } from '../middleware/auth.middleware';
 
 const router = Router();
 
-// GET /api/data/export — dump all tables as a downloadable JSON file
-router.get('/export', async (_req: Request, res: Response) => {
+// GET /api/data/export — course structure + progress scoped to current user
+// (all progress when AUTH_DISABLED=true, current user's only when auth is on)
+router.get('/export', authenticate, async (req: AuthRequest, res: Response) => {
   try {
+    const userId = req.user!.id;
+    const progressWhere = config.authDisabled ? {} : { userId };
+
     const [
-      users,
       courseCategories,
       courses,
       courseSections,
       videos,
       videoSubtitles,
       userProgress,
-      userCourseEnrollments,
-      videoNotes,
-      videoBookmarks,
     ] = await Promise.all([
-      prisma.user.findMany(),
       prisma.courseCategory.findMany(),
       prisma.course.findMany(),
       prisma.courseSection.findMany(),
       prisma.video.findMany(),
       prisma.videoSubtitle.findMany(),
-      prisma.userProgress.findMany(),
-      prisma.userCourseEnrollment.findMany(),
-      prisma.videoNote.findMany(),
-      prisma.videoBookmark.findMany(),
+      prisma.userProgress.findMany({ where: progressWhere }),
     ]);
 
     const payload = {
       exportedAt: new Date().toISOString(),
       version: '1.0',
       data: {
-        users,
         courseCategories,
         courses,
         courseSections,
         videos,
         videoSubtitles,
         userProgress,
-        userCourseEnrollments,
-        videoNotes,
-        videoBookmarks,
       },
     };
 
@@ -58,7 +52,7 @@ router.get('/export', async (_req: Request, res: Response) => {
 });
 
 // POST /api/data/import — clear all tables and re-insert from JSON body
-router.post('/import', async (req: Request, res: Response) => {
+router.post('/import', async (req: AuthRequest, res: Response) => {
   const { data } = req.body as {
     data: {
       users?: any[];
@@ -80,6 +74,65 @@ router.post('/import', async (req: Request, res: Response) => {
   }
 
   try {
+    // Normalise fields that changed from Json/String[] (PostgreSQL) to String (SQLite).
+    // This makes old PostgreSQL exports transparently importable.
+    const toStr = (v: unknown, fallback: string) =>
+      typeof v === 'string' ? v : JSON.stringify(v ?? JSON.parse(fallback));
+
+    const normalisedUsers = (data.users ?? []).map((u) => ({
+      ...u,
+      preferences: toStr(u.preferences, '{}'),
+    }));
+    const normalisedCourses = (data.courses ?? []).map((c) => ({
+      ...c,
+      tags: toStr(c.tags, '[]'),
+    }));
+    const normalisedVideos = (data.videos ?? []).map((v) => ({
+      ...v,
+      metadata: toStr(v.metadata, '{}'),
+    }));
+
+    // When auth is disabled there is a single system user — remap all imported
+    // progress (and related records) to that user so queries by req.user.id
+    // ('system') find everything without needing a special no-filter path.
+    const effectiveUserId = config.authDisabled ? 'system' : null;
+    const remapUser = (r: any) =>
+      effectiveUserId ? { ...r, userId: effectiveUserId } : r;
+
+    // Remap userId then deduplicate by videoId — two old users may have watched
+    // the same video, which after remapping to 'system' would violate the
+    // unique(userId, videoId) constraint. Keep the most recently watched record.
+    const rawProgress = (data.userProgress ?? []).map(remapUser);
+    const progressByVideo = new Map<string, any>();
+    for (const p of rawProgress) {
+      const existing = progressByVideo.get(p.videoId);
+      if (!existing || new Date(p.lastWatchedAt) > new Date(existing.lastWatchedAt)) {
+        progressByVideo.set(p.videoId, p);
+      }
+    }
+    const normalisedProgress = Array.from(progressByVideo.values());
+
+    // Same dedup for enrollments (unique userId+courseId)
+    const rawEnrollments = (data.userCourseEnrollments ?? []).map(remapUser);
+    const enrollmentByCourse = new Map<string, any>();
+    for (const e of rawEnrollments) {
+      if (!enrollmentByCourse.has(e.courseId)) enrollmentByCourse.set(e.courseId, e);
+    }
+    const normalisedEnrollments = Array.from(enrollmentByCourse.values());
+
+    const normalisedNotes = (data.videoNotes ?? []).map(remapUser);
+    const normalisedBookmarks = (data.videoBookmarks ?? []).map(remapUser);
+
+    // When auth is disabled, ensure the system user row exists before the
+    // transaction so the remapped progress records pass the FK constraint.
+    if (config.authDisabled) {
+      await prisma.user.upsert({
+        where: { id: 'system' },
+        update: {},
+        create: { id: 'system', email: 'system@local', passwordHash: '', fullName: 'System', role: 'ADMIN' },
+      });
+    }
+
     // Everything runs in a single interactive transaction.
     // If any step throws, Prisma rolls back the entire operation —
     // the old data is fully restored.
@@ -94,51 +147,53 @@ router.post('/import', async (req: Request, res: Response) => {
         await tx.video.deleteMany();
         await tx.courseSection.deleteMany();
         await tx.course.deleteMany();
-        await tx.user.deleteMany();
+        // When auth is disabled we don't import old user accounts — the system
+        // user was already upserted above outside the transaction.
+        if (!config.authDisabled) await tx.user.deleteMany();
         await tx.courseCategory.deleteMany();
 
         // 2. Insert in dependency order
         const counts: Record<string, number> = {};
 
-        if (data.users?.length) {
-          await tx.user.createMany({ data: data.users, skipDuplicates: true });
-          counts.users = data.users.length;
+        if (!config.authDisabled && normalisedUsers.length) {
+          await tx.user.createMany({ data: normalisedUsers });
+          counts.users = normalisedUsers.length;
         }
         if (data.courseCategories?.length) {
-          await tx.courseCategory.createMany({ data: data.courseCategories, skipDuplicates: true });
+          await tx.courseCategory.createMany({ data: data.courseCategories });
           counts.courseCategories = data.courseCategories.length;
         }
-        if (data.courses?.length) {
-          await tx.course.createMany({ data: data.courses, skipDuplicates: true });
-          counts.courses = data.courses.length;
+        if (normalisedCourses.length) {
+          await tx.course.createMany({ data: normalisedCourses });
+          counts.courses = normalisedCourses.length;
         }
         if (data.courseSections?.length) {
-          await tx.courseSection.createMany({ data: data.courseSections, skipDuplicates: true });
+          await tx.courseSection.createMany({ data: data.courseSections });
           counts.courseSections = data.courseSections.length;
         }
-        if (data.videos?.length) {
-          await tx.video.createMany({ data: data.videos, skipDuplicates: true });
-          counts.videos = data.videos.length;
+        if (normalisedVideos.length) {
+          await tx.video.createMany({ data: normalisedVideos });
+          counts.videos = normalisedVideos.length;
         }
         if (data.videoSubtitles?.length) {
-          await tx.videoSubtitle.createMany({ data: data.videoSubtitles, skipDuplicates: true });
+          await tx.videoSubtitle.createMany({ data: data.videoSubtitles });
           counts.videoSubtitles = data.videoSubtitles.length;
         }
-        if (data.userProgress?.length) {
-          await tx.userProgress.createMany({ data: data.userProgress, skipDuplicates: true });
-          counts.userProgress = data.userProgress.length;
+        if (normalisedProgress.length) {
+          await tx.userProgress.createMany({ data: normalisedProgress });
+          counts.userProgress = normalisedProgress.length;
         }
-        if (data.userCourseEnrollments?.length) {
-          await tx.userCourseEnrollment.createMany({ data: data.userCourseEnrollments, skipDuplicates: true });
-          counts.userCourseEnrollments = data.userCourseEnrollments.length;
+        if (normalisedEnrollments.length) {
+          await tx.userCourseEnrollment.createMany({ data: normalisedEnrollments });
+          counts.userCourseEnrollments = normalisedEnrollments.length;
         }
-        if (data.videoNotes?.length) {
-          await tx.videoNote.createMany({ data: data.videoNotes, skipDuplicates: true });
-          counts.videoNotes = data.videoNotes.length;
+        if (normalisedNotes.length) {
+          await tx.videoNote.createMany({ data: normalisedNotes });
+          counts.videoNotes = normalisedNotes.length;
         }
-        if (data.videoBookmarks?.length) {
-          await tx.videoBookmark.createMany({ data: data.videoBookmarks, skipDuplicates: true });
-          counts.videoBookmarks = data.videoBookmarks.length;
+        if (normalisedBookmarks.length) {
+          await tx.videoBookmark.createMany({ data: normalisedBookmarks });
+          counts.videoBookmarks = normalisedBookmarks.length;
         }
 
         return counts;

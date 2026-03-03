@@ -111,7 +111,7 @@ export function CoursesPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Video Learning Platform</h1>
+              <h1 className="text-2xl font-bold text-gray-900">HomeCourse</h1>
               <p className="text-sm text-gray-600">Browse and learn from available courses</p>
             </div>
             <div className="flex items-center gap-2">

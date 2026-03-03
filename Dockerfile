@@ -39,4 +39,4 @@ VOLUME ["/data"]
 EXPOSE 3000
 
 # Sync schema to DB on every start (safe, idempotent) then run the server
-CMD ["sh", "-c", "node_modules/.bin/prisma db push --skip-generate && node dist/index.js"]
+CMD ["sh", "-c", "DATABASE_URL=${DATABASE_URL:-file:/data/app.db} node_modules/.bin/prisma db push --skip-generate && node dist/index.js"]

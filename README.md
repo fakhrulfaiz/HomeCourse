@@ -1,8 +1,10 @@
 # HomeCourse
 
-A self-hosted video learning platform. Point it at your local video folders and it automatically organises them into courses — no setup needed beyond Docker.
+HomeCourse is a self-hosted video learning platform for your own machine. You point it at a folder of videos, it organises them into courses automatically, and you watch them through a web UI in your browser.
 
-Ships as a **single Docker image** that contains everything: the API, the web UI, and the database. No separate containers, no extra software.
+- **No cloud.** Everything runs locally.
+- **No manual setup.** Drop videos in folders, click Scan, done.
+- **One Docker image.** Frontend, backend, and database all in one container.
 
 ---
 
@@ -25,7 +27,7 @@ docker run -d \
   -e ADMIN_EMAIL=admin@example.com \
   -e ADMIN_PASSWORD=your_password \
   -e VIDEO_DIRS=/media/videos \
-  ghcr.io/YOUR_GITHUB_USERNAME/homecourse:latest
+  ghcr.io/fakhrulfaiz/homecourse:latest
 ```
 
 Open **http://localhost:8080** and log in with the email and password you set above.
@@ -42,8 +44,8 @@ Open **http://localhost:8080** and log in with the email and password you set ab
 mkdir homecourse && cd homecourse
 
 # Linux / Mac
-curl -O https://raw.githubusercontent.com/YOUR_GITHUB_USERNAME/HomeCourse/main/docker-compose.prod.yml
-curl -o .env https://raw.githubusercontent.com/YOUR_GITHUB_USERNAME/HomeCourse/main/.env.example
+curl -O https://raw.githubusercontent.com/fakhrulfaiz/HomeCourse/main/docker-compose.prod.yml
+curl -o .env https://raw.githubusercontent.com/fakhrulfaiz/HomeCourse/main/.env.example
 ```
 
 On Windows, just download both files from the GitHub repository and put them in the same folder.
@@ -51,7 +53,7 @@ On Windows, just download both files from the GitHub repository and put them in 
 **2. Edit `.env`:**
 
 ```env
-GITHUB_USERNAME=your_github_username
+GITHUB_USERNAME=fakhrulfaiz
 
 JWT_SECRET=replace_with_a_long_random_string
 
@@ -213,7 +215,7 @@ docker run --rm `
 ## Development
 
 ```bash
-git clone https://github.com/YOUR_GITHUB_USERNAME/HomeCourse.git
+git clone https://github.com/fakhrulfaiz/HomeCourse.git
 cd HomeCourse
 
 cp .env.example .env

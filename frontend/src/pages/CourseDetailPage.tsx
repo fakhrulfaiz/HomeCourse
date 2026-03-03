@@ -19,21 +19,6 @@ export function CourseDetailPage() {
   const [completedVideos, setCompletedVideos] = useState<Set<string>>(new Set());
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    if (courseId) loadCourse();
-  }, [courseId, loadCourse]);
-
-  // Auto-show sidebar when window becomes wide (lg breakpoint = 1024px).
-  useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth >= 1024) {
-        setSidebarOpen(true);
-      }
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
   const loadCourse = useCallback(async () => {
     try {
       const data = await courseService.getCourse(courseId!);
@@ -62,6 +47,21 @@ export function CourseDetailPage() {
       setLoading(false);
     }
   }, [courseId]);
+
+  useEffect(() => {
+    if (courseId) loadCourse();
+  }, [courseId, loadCourse]);
+
+  // Auto-show sidebar when window becomes wide (lg breakpoint = 1024px).
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 1024) {
+        setSidebarOpen(true);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const handleEnroll = async () => {
     try {

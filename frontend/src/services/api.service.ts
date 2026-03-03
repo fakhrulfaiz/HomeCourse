@@ -117,6 +117,30 @@ export const videoService = {
   },
 };
 
+export const dataService = {
+  async exportData(): Promise<void> {
+    const response = await api.get('/data/export', { responseType: 'blob' });
+    const disposition: string = response.headers['content-disposition'] ?? '';
+    const match = disposition.match(/filename="([^"]+)"/);
+    const filename = match ? match[1] : `vlearn-export-${Date.now()}.json`;
+    const url = URL.createObjectURL(new Blob([response.data], { type: 'application/json' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  },
+
+  async importData(file: File): Promise<{ imported: Record<string, number> }> {
+    const text = await file.text();
+    const payload = JSON.parse(text);
+    const response = await api.post('/data/import', payload);
+    return response.data;
+  },
+};
+
 export const progressService = {
   async updateProgress(
     videoId: string,

@@ -1,15 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { courseService, type Course } from '@/services/api.service';
+import { courseService, dataService, type Course } from '@/services/api.service';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { BookOpen, Clock, PlayCircle, RefreshCw } from 'lucide-react';
+import { BookOpen, Clock, Download, PlayCircle, RefreshCw, Upload } from 'lucide-react';
 
 export function CoursesPage() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<string>('');
   const [error, setError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadCourses();
@@ -23,6 +27,46 @@ export function CoursesPage() {
       setError(err.response?.data?.error || 'Failed to load courses');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleExport = async () => {
+    setExporting(true);
+    setError('');
+    setImportResult('');
+    try {
+      await dataService.exportData();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Export failed');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleImportClick = () => {
+    setImportResult('');
+    setError('');
+    fileInputRef.current?.click();
+  };
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    setImporting(true);
+    setError('');
+    setImportResult('');
+    try {
+      const result = await dataService.importData(file);
+      const summary = Object.entries(result.imported)
+        .map(([k, v]) => `${v} ${k}`)
+        .join(', ');
+      setImportResult(`Imported: ${summary || 'nothing'}`);
+      await loadCourses();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Import failed');
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -70,15 +114,42 @@ export function CoursesPage() {
               <h1 className="text-2xl font-bold text-gray-900">Video Learning Platform</h1>
               <p className="text-sm text-gray-600">Browse and learn from available courses</p>
             </div>
-            <Button 
-              onClick={handleScanVideos} 
-              disabled={scanning}
-              variant="outline"
-              className="cursor-pointer"
-            >
-              <RefreshCw className={`h-4 w-4 mr-2 ${scanning ? 'animate-spin' : ''}`} />
-              {scanning ? 'Scanning...' : 'Scan for Videos'}
-            </Button>
+            <div className="flex items-center gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".json"
+                className="hidden"
+                onChange={handleImportFile}
+              />
+              <Button
+                onClick={handleImportClick}
+                disabled={importing}
+                variant="outline"
+                className="cursor-pointer"
+              >
+                <Upload className={`h-4 w-4 mr-2 ${importing ? 'animate-pulse' : ''}`} />
+                {importing ? 'Importing...' : 'Import Data'}
+              </Button>
+              <Button
+                onClick={handleExport}
+                disabled={exporting}
+                variant="outline"
+                className="cursor-pointer"
+              >
+                <Download className={`h-4 w-4 mr-2 ${exporting ? 'animate-pulse' : ''}`} />
+                {exporting ? 'Exporting...' : 'Export Data'}
+              </Button>
+              <Button
+                onClick={handleScanVideos}
+                disabled={scanning}
+                variant="outline"
+                className="cursor-pointer"
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${scanning ? 'animate-spin' : ''}`} />
+                {scanning ? 'Scanning...' : 'Scan for Videos'}
+              </Button>
+            </div>
           </div>
         </div>
       </header>
@@ -93,6 +164,12 @@ export function CoursesPage() {
         {error && (
           <div className="bg-red-50 text-red-600 p-4 rounded-md mb-6">
             {error}
+          </div>
+        )}
+
+        {importResult && (
+          <div className="bg-green-50 text-green-700 p-4 rounded-md mb-6">
+            {importResult}
           </div>
         )}
 

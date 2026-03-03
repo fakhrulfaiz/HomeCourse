@@ -9,6 +9,7 @@ import authRoutes from './routes/auth.routes';
 import courseRoutes from './routes/course.routes';
 import videoRoutes from './routes/video.routes';
 import progressRoutes from './routes/progress.routes';
+import dataRoutes from './routes/data.routes';
 
 const app: Application = express();
 
@@ -17,8 +18,8 @@ app.use(cors({
   origin: true, // Allow all origins in development
   credentials: true,
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 app.use(cookieParser());
 
 // Health check
@@ -31,6 +32,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/courses', courseRoutes);
 app.use('/api/videos', videoRoutes);
 app.use('/api/progress', progressRoutes);
+app.use('/api/data', dataRoutes);
 
 // Error handling middleware
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {

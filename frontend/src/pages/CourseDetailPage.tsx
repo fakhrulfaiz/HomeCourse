@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { courseService, videoService, progressService, type Course, type Video } from '@/services/api.service';
+import type { AxiosError } from 'axios';
+import { courseService, videoService, progressService, type Course, type CourseSection, type Video } from '@/services/api.service';
 import { VideoPlayer } from '@/components/VideoPlayer';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -19,10 +20,8 @@ export function CourseDetailPage() {
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    if (courseId) {
-      loadCourse();
-    }
-  }, [courseId]);
+    if (courseId) loadCourse();
+  }, [courseId, loadCourse]);
 
   // Auto-show sidebar when window becomes wide (lg breakpoint = 1024px).
   useEffect(() => {
@@ -35,12 +34,11 @@ export function CourseDetailPage() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const loadCourse = async () => {
+  const loadCourse = useCallback(async () => {
     try {
       const data = await courseService.getCourse(courseId!);
       setCourse(data);
-      
-      // Build completed videos set
+
       const completed = new Set<string>();
       data.sections?.forEach(section => {
         section.videos.forEach(video => {
@@ -50,28 +48,27 @@ export function CourseDetailPage() {
         });
       });
       setCompletedVideos(completed);
-      setExpandedSections(new Set()); // Collapsed by default
-      
-      // Set first video as current
+      setExpandedSections(new Set());
+
       if (data.sections && data.sections.length > 0) {
         const firstSection = data.sections[0];
         if (firstSection.videos && firstSection.videos.length > 0) {
           setCurrentVideo(firstSection.videos[0]);
         }
       }
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to load course');
+    } catch (err: unknown) {
+      setError((err as AxiosError<{error: string}>).response?.data?.error || 'Failed to load course');
     } finally {
       setLoading(false);
     }
-  };
+  }, [courseId]);
 
   const handleEnroll = async () => {
     try {
       await courseService.enrollCourse(courseId!);
       setEnrolled(true);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to enroll');
+    } catch (err: unknown) {
+      setError((err as AxiosError<{error: string}>).response?.data?.error || 'Failed to enroll');
     }
   };
 
@@ -183,7 +180,7 @@ export function CourseDetailPage() {
     });
   };
 
-  const getSectionProgress = (section: any) => {
+  const getSectionProgress = (section: CourseSection) => {
     const totalVideos = section.videos.length;
     const completedCount = section.videos.filter((video: Video) => 
       completedVideos.has(video.id)
@@ -351,7 +348,7 @@ export function CourseDetailPage() {
             <div className="p-4">
               <h3 className="text-lg font-semibold text-white mb-4">Course Content</h3>
               <div className="space-y-4">
-                {course.sections?.map((section, _sectionIndex) => {
+                {course.sections?.map((section) => {
                   const progress = getSectionProgress(section);
                   return (
                   <div key={section.id}>

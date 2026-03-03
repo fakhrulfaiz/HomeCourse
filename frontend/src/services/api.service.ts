@@ -76,6 +76,32 @@ export interface Enrollment {
   completedAt?: string;
 }
 
+export interface CourseProgress {
+  id: string;
+  userId: string;
+  courseId: string;
+  progressPercentage: number;
+  isCompleted: boolean;
+  enrolledAt: string;
+  completedAt?: string;
+  totalVideos: number;
+  completedVideos: number;
+}
+
+export interface RecentVideoProgress extends Progress {
+  video: Video & {
+    section: { course: Course };
+  };
+}
+
+export interface LearningStats {
+  totalVideosWatched: number;
+  completedVideos: number;
+  totalCoursesEnrolled: number;
+  completedCourses: number;
+  totalWatchTimeSeconds: number;
+}
+
 export const courseService = {
   async getCourses(): Promise<Course[]> {
     const response = await api.get('/courses');
@@ -92,7 +118,7 @@ export const courseService = {
     return response.data;
   },
 
-  async getCourseProgress(id: string): Promise<any> {
+  async getCourseProgress(id: string): Promise<CourseProgress> {
     const response = await api.get(`/courses/${id}/progress`);
     return response.data;
   },
@@ -122,7 +148,7 @@ export const dataService = {
     const response = await api.get('/data/export', { responseType: 'blob' });
     const disposition: string = response.headers['content-disposition'] ?? '';
     const match = disposition.match(/filename="([^"]+)"/);
-    const filename = match ? match[1] : `vlearn-export-${Date.now()}.json`;
+    const filename = match ? match[1] : `homecourse-export-${Date.now()}.json`;
     const url = URL.createObjectURL(new Blob([response.data], { type: 'application/json' }));
     const a = document.createElement('a');
     a.href = url;
@@ -169,12 +195,12 @@ export const progressService = {
     return response.data;
   },
 
-  async getRecentVideos(limit = 10): Promise<any[]> {
+  async getRecentVideos(limit = 10): Promise<RecentVideoProgress[]> {
     const response = await api.get(`/progress/recent?limit=${limit}`);
     return response.data;
   },
 
-  async getStats(): Promise<any> {
+  async getStats(): Promise<LearningStats> {
     const response = await api.get('/progress/stats');
     return response.data;
   },

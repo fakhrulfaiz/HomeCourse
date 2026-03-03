@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import type { AxiosError } from 'axios';
 import { useAuthStore } from '@/store/authStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,8 +36,8 @@ export function RegisterPage() {
     try {
       await register(email, password, fullName);
       navigate('/courses');
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to register');
+    } catch (err: unknown) {
+      setError((err as AxiosError<{error: string}>).response?.data?.error || 'Failed to register');
     } finally {
       setLoading(false);
     }

@@ -207,20 +207,36 @@ export class VideoScannerService {
   private async syncCourse(courseData: CourseData): Promise<void> {
     console.log(`📚 Syncing course: ${courseData.folderName}`);
 
-    // Create or update course
-    const course = await prisma.course.upsert({
-      where: { folderPath: courseData.folderPath },
-      update: {
-        title: courseData.folderName,
-        updatedAt: new Date(),
-      },
-      create: {
-        title: courseData.folderName,
-        slug: this.generateSlug(courseData.folderName),
-        folderPath: courseData.folderPath,
-        isPublished: true,
-      },
-    });
+    const slug = this.generateSlug(courseData.folderName);
+
+    // Look up by folderPath first, then fall back to slug.
+    // The slug fallback handles imported data whose stored folderPath no longer matches
+    // the current container mount (e.g. after a fresh docker run with a different -v path).
+    let existing = await prisma.course.findFirst({ where: { folderPath: courseData.folderPath } });
+    if (!existing) {
+      existing = await prisma.course.findFirst({ where: { slug } });
+    }
+
+    let course;
+    if (existing) {
+      course = await prisma.course.update({
+        where: { id: existing.id },
+        data: {
+          title: courseData.folderName,
+          folderPath: courseData.folderPath, // sync path to current mount
+          updatedAt: new Date(),
+        },
+      });
+    } else {
+      course = await prisma.course.create({
+        data: {
+          title: courseData.folderName,
+          slug,
+          folderPath: courseData.folderPath,
+          isPublished: true,
+        },
+      });
+    }
 
     // Sync sections
     for (let i = 0; i < courseData.sections.length; i++) {

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import type { AxiosError } from 'axios';
 import { useAuthStore } from '@/store/authStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,8 +23,8 @@ export function LoginPage() {
     try {
       await login(email, password);
       navigate('/courses');
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to login');
+    } catch (err: unknown) {
+      setError((err as AxiosError<{error: string}>).response?.data?.error || 'Failed to login');
     } finally {
       setLoading(false);
     }

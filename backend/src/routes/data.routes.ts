@@ -43,7 +43,7 @@ router.get('/export', authenticate, async (req: AuthRequest, res: Response) => {
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Content-Disposition', `attachment; filename="vlearn-export-${timestamp}.json"`);
+    res.setHeader('Content-Disposition', `attachment; filename="homecourse-export-${timestamp}.json"`);
     res.json(payload);
   } catch (err: any) {
     console.error('Export error:', err);

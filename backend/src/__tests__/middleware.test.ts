@@ -2,7 +2,7 @@ import request from 'supertest';
 import app from '../app';
 import { config } from '../config';
 import { createUser, createCourse, createSection, createVideo } from './helpers/db';
-import { authHeader, makeToken } from './helpers/auth';
+import { authHeader } from './helpers/auth';
 
 // ── AUTH_DISABLED bypass ──────────────────────────────────────────────────────
 

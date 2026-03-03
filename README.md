@@ -5,6 +5,7 @@ HomeCourse is a self-hosted video learning platform for your own machine. You po
 - **No cloud.** Everything runs locally.
 - **No manual setup.** Drop videos in folders, click Scan, done.
 - **One Docker image.** Frontend, backend, and database all in one container.
+- **Progress tracking.** Remembers where you left off in every video — something a plain local video player cannot do. That is the whole point of running it as a server.
 
 ---
 

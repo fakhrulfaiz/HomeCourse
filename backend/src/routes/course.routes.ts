@@ -1,36 +1,36 @@
-import { Router, Response, Request } from 'express';
+import { Router, Response } from 'express';
 import prisma from '../lib/prisma';
+import { config } from '../config';
 import { authenticate, AuthRequest } from '../middleware/auth.middleware';
 
 const router = Router();
 
-// Get all courses (no auth required)
-router.get('/', async (_req: Request, res: Response): Promise<void> => {
+function parseTags(raw: string | string[]): string[] {
+  if (Array.isArray(raw)) return raw;
+  try { return JSON.parse(raw); } catch { return []; }
+}
+
+// Get all courses
+router.get('/', authenticate, async (_req: AuthRequest, res: Response): Promise<void> => {
   try {
     const courses = await prisma.course.findMany({
       where: { isPublished: true },
-      include: {
-        _count: {
-          select: {
-            sections: true,
-          },
-        },
-      },
+      include: { _count: { select: { sections: true } } },
       orderBy: { createdAt: 'desc' },
     });
 
-    res.json(courses);
+    res.json(courses.map((c) => ({ ...c, tags: parseTags(c.tags) })));
   } catch (error) {
     console.error('Get courses error:', error);
     res.status(500).json({ error: 'Failed to fetch courses' });
   }
 });
 
-// Get course by ID with sections and videos (no auth required)
-router.get('/:id', async (req: Request, res: Response): Promise<void> => {
+// Get course by ID with sections and videos
+router.get('/:id', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const ANONYMOUS_USER_ID = 'anonymous-user';
+    const userId = req.user!.id;
 
     const course = await prisma.course.findUnique({
       where: { id },
@@ -41,7 +41,7 @@ router.get('/:id', async (req: Request, res: Response): Promise<void> => {
               include: {
                 subtitles: true,
                 progress: {
-                  where: { userId: ANONYMOUS_USER_ID },
+                  where: { userId },
                   take: 1,
                 },
               },
@@ -58,7 +58,7 @@ router.get('/:id', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    res.json(course);
+    res.json({ ...course, tags: parseTags(course.tags) });
   } catch (error) {
     console.error('Get course error:', error);
     res.status(500).json({ error: 'Failed to fetch course' });
@@ -71,21 +71,14 @@ router.post('/:id/enroll', authenticate, async (req: AuthRequest, res: Response)
     const { id } = req.params;
     const userId = req.user!.id;
 
-    // Check if course exists
     const course = await prisma.course.findUnique({ where: { id } });
     if (!course) {
       res.status(404).json({ error: 'Course not found' });
       return;
     }
 
-    // Check if already enrolled
     const existingEnrollment = await prisma.userCourseEnrollment.findUnique({
-      where: {
-        userId_courseId: {
-          userId,
-          courseId: id,
-        },
-      },
+      where: { userId_courseId: { userId, courseId: id } },
     });
 
     if (existingEnrollment) {
@@ -93,12 +86,8 @@ router.post('/:id/enroll', authenticate, async (req: AuthRequest, res: Response)
       return;
     }
 
-    // Create enrollment
     const enrollment = await prisma.userCourseEnrollment.create({
-      data: {
-        userId,
-        courseId: id,
-      },
+      data: { userId, courseId: id },
     });
 
     res.status(201).json(enrollment);
@@ -115,24 +104,13 @@ router.get('/:id/progress', authenticate, async (req: AuthRequest, res: Response
     const userId = req.user!.id;
 
     const enrollment = await prisma.userCourseEnrollment.findUnique({
-      where: {
-        userId_courseId: {
-          userId,
-          courseId: id,
-        },
-      },
+      where: { userId_courseId: { userId, courseId: id } },
       include: {
         course: {
           include: {
             sections: {
               include: {
-                videos: {
-                  include: {
-                    progress: {
-                      where: { userId },
-                    },
-                  },
-                },
+                videos: { include: { progress: { where: { userId } } } },
               },
             },
           },
@@ -145,29 +123,20 @@ router.get('/:id/progress', authenticate, async (req: AuthRequest, res: Response
       return;
     }
 
-    // Calculate progress
     let totalVideos = 0;
     let completedVideos = 0;
 
     for (const section of enrollment.course.sections) {
       for (const video of section.videos) {
         totalVideos++;
-        if (video.progress[0]?.isCompleted) {
-          completedVideos++;
-        }
+        if (video.progress[0]?.isCompleted) completedVideos++;
       }
     }
 
     const progressPercentage = totalVideos > 0 ? (completedVideos / totalVideos) * 100 : 0;
 
-    // Update enrollment progress
     const updatedEnrollment = await prisma.userCourseEnrollment.update({
-      where: {
-        userId_courseId: {
-          userId,
-          courseId: id,
-        },
-      },
+      where: { userId_courseId: { userId, courseId: id } },
       data: {
         progressPercentage,
         isCompleted: progressPercentage === 100,
@@ -175,30 +144,27 @@ router.get('/:id/progress', authenticate, async (req: AuthRequest, res: Response
       },
     });
 
-    res.json({
-      ...updatedEnrollment,
-      totalVideos,
-      completedVideos,
-    });
+    res.json({ ...updatedEnrollment, totalVideos, completedVideos });
   } catch (error) {
     console.error('Get progress error:', error);
     res.status(500).json({ error: 'Failed to fetch course progress' });
   }
 });
 
-// Trigger video scan
+// Trigger video scan across all configured video directories.
+// Awaits completion so the client only gets a response once scanning is done
+// and the DB is fully up to date.
 router.post('/scan', async (_req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { VideoScannerService } = await import('../services/videoScanner.service');
-    const scanner = new VideoScannerService();
-    
-    // Run scan in background
-    scanner.scanAndSync().catch(console.error);
+    const scanner = new VideoScannerService(config.videoDirs);
 
-    res.json({ message: 'Video scan started' });
+    await scanner.scanAndSync();
+
+    res.json({ message: 'Video scan complete', directories: config.videoDirs });
   } catch (error) {
     console.error('Scan error:', error);
-    res.status(500).json({ error: 'Failed to start video scan' });
+    res.status(500).json({ error: 'Video scan failed' });
   }
 });
 

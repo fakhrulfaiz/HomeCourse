@@ -26,4 +26,4 @@ EXPOSE 3000
 
 # Generate Prisma client on startup (needed because node_modules is a volume)
 # Then start development server with nodemon
-CMD ["sh", "-c", "npx prisma generate && npm run dev"]
+CMD ["sh", "-c", "npx prisma generate && npx prisma db push --skip-generate && npm run dev"]

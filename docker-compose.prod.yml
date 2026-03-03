@@ -1,0 +1,47 @@
+# Video Learning Platform — production docker-compose
+#
+# QUICK START
+# -----------
+# 1. Copy .env.example to .env and fill in your values.
+# 2. Run: docker compose -f docker-compose.prod.yml up -d
+# 3. Open http://localhost:8080 in your browser.
+#
+# MULTIPLE VIDEO LIBRARIES
+# ------------------------
+# Add one volume line per extra library and extend VIDEO_DIRS:
+#
+#   volumes:
+#     - db_data:/data
+#     - ${VIDEO_DIR_1}:/media/lib1:ro
+#     - ${VIDEO_DIR_2}:/media/lib2:ro     ← add this
+#   environment:
+#     - VIDEO_DIRS=/media/lib1,/media/lib2  ← extend this
+
+services:
+  vlearn:
+    image: ghcr.io/${GITHUB_USERNAME}/vlearn:latest
+    container_name: vlearn
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-8080}:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=file:/data/app.db
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}
+      # Set AUTH_DISABLED=true to remove the login screen entirely
+      - AUTH_DISABLED=${AUTH_DISABLED:-false}
+      # Auto-create an admin account on first boot
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+      # Container-side paths — must match the volume mounts below
+      - VIDEO_DIRS=${VIDEO_DIRS:-/media/videos}
+      - ALLOWED_VIDEO_FORMATS=${ALLOWED_VIDEO_FORMATS:-mp4,webm,mkv,avi,mov}
+    volumes:
+      # SQLite database — keep this mounted so data survives restarts/upgrades
+      - db_data:/data
+      # Video library — add more lines for additional libraries
+      - ${VIDEO_DIR_1:-/tmp/videos}:/media/videos:ro
+
+volumes:
+  db_data:

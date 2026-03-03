@@ -30,26 +30,30 @@ interface CourseData {
 }
 
 export class VideoScannerService {
-  private basePath: string;
+  private basePaths: string[];
 
-  constructor(basePath?: string) {
-    this.basePath = basePath || config.videosBasePath;
+  constructor(basePaths?: string | string[]) {
+    if (basePaths) {
+      this.basePaths = Array.isArray(basePaths) ? basePaths : [basePaths];
+    } else {
+      this.basePaths = config.videoDirs;
+    }
   }
 
   /**
-   * Scan the base directory for courses and videos
+   * Scan all configured directories for courses and videos
    */
   async scanAndSync(): Promise<void> {
-    console.log(`📂 Scanning videos from: ${this.basePath}`);
-    
+    console.log(`📂 Scanning video directories: ${this.basePaths.join(', ')}`);
+
     try {
-      const courses = await this.discoverCourses();
-      console.log(`✅ Found ${courses.length} courses`);
-
-      for (const courseData of courses) {
-        await this.syncCourse(courseData);
+      for (const basePath of this.basePaths) {
+        const courses = await this.discoverCourses(basePath);
+        console.log(`  ✅ Found ${courses.length} courses in ${basePath}`);
+        for (const courseData of courses) {
+          await this.syncCourse(courseData);
+        }
       }
-
       console.log('✅ Video scanning complete!');
     } catch (error) {
       console.error('❌ Error scanning videos:', error);
@@ -58,29 +62,28 @@ export class VideoScannerService {
   }
 
   /**
-   * Discover all courses in the base directory
+   * Discover all courses in a given base directory
    */
-  private async discoverCourses(): Promise<CourseData[]> {
+  private async discoverCourses(basePath: string): Promise<CourseData[]> {
     const courses: CourseData[] = [];
-    const entries = await fs.readdir(this.basePath, { withFileTypes: true });
+
+    let entries;
+    try {
+      entries = await fs.readdir(basePath, { withFileTypes: true });
+    } catch {
+      console.warn(`⚠️  Could not read directory: ${basePath}`);
+      return courses;
+    }
 
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
-      
-      // Skip hidden folders and the video-learning-platform folder
-      if (entry.name.startsWith('.') || entry.name === 'video-learning-platform') {
-        continue;
-      }
+      if (entry.name.startsWith('.') || entry.name === 'video-learning-platform') continue;
 
-      const coursePath = path.join(this.basePath, entry.name);
+      const coursePath = path.join(basePath, entry.name);
       const sections = await this.discoverSections(coursePath);
 
       if (sections.length > 0) {
-        courses.push({
-          folderName: entry.name,
-          folderPath: coursePath,
-          sections,
-        });
+        courses.push({ folderName: entry.name, folderPath: coursePath, sections });
       }
     }
 

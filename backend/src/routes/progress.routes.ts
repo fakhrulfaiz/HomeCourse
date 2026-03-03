@@ -1,56 +1,100 @@
-import { Router, Response, Request } from 'express';
+import { Router, Response } from 'express';
 import prisma from '../lib/prisma';
+import { config } from '../config';
+import { authenticate, AuthRequest } from '../middleware/auth.middleware';
 
 const router = Router();
 
-// Anonymous user ID for no-auth mode
-const ANONYMOUS_USER_ID = 'anonymous-user';
+// When auth is disabled, progress is written under this system user ID.
+const SYSTEM_USER_ID = 'system';
 
-// Ensure anonymous user exists
-async function ensureAnonymousUser() {
+// Ensure the system user row exists (needed for FK constraints when AUTH_DISABLED=true)
+async function ensureSystemUser() {
   await prisma.user.upsert({
-    where: { id: ANONYMOUS_USER_ID },
+    where: { id: SYSTEM_USER_ID },
     update: {},
     create: {
-      id: ANONYMOUS_USER_ID,
-      email: 'anonymous@local',
+      id: SYSTEM_USER_ID,
+      email: 'system@local',
       passwordHash: '',
-      fullName: 'Anonymous User',
+      fullName: 'System',
+      role: 'ADMIN',
     },
   });
 }
 
-// Update video progress (no auth required)
-router.post('/', async (req: Request, res: Response): Promise<void> => {
+// Get learning statistics — must be defined before GET /:videoId to avoid route shadowing
+router.get('/stats', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    await ensureAnonymousUser();
-    const { videoId, lastPositionSeconds, watchTimeSeconds, completionPercentage } = req.body;
-    const userId = ANONYMOUS_USER_ID;
+    const userId = req.user!.id;
 
-    // Validate input
+    const [totalProgress, completedVideos, enrollments, totalWatchTime] = await Promise.all([
+      prisma.userProgress.count({ where: { userId } }),
+      prisma.userProgress.count({ where: { userId, isCompleted: true } }),
+      prisma.userCourseEnrollment.findMany({
+        where: { userId },
+        include: { course: { include: { _count: { select: { sections: true } } } } },
+      }),
+      prisma.userProgress.aggregate({ where: { userId }, _sum: { watchTimeSeconds: true } }),
+    ]);
+
+    res.json({
+      totalVideosWatched: totalProgress,
+      completedVideos,
+      totalCoursesEnrolled: enrollments.length,
+      completedCourses: enrollments.filter((e: any) => e.isCompleted).length,
+      totalWatchTimeSeconds: totalWatchTime._sum.watchTimeSeconds || 0,
+    });
+  } catch (error) {
+    console.error('Get stats error:', error);
+    res.status(500).json({ error: 'Failed to fetch statistics' });
+  }
+});
+
+// Get recent videos — must be defined before GET /:videoId to avoid route shadowing
+router.get('/recent', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.id;
+    const limit = parseInt(req.query.limit as string) || 10;
+
+    const progress = await prisma.userProgress.findMany({
+      where: { userId },
+      include: {
+        video: { include: { section: { include: { course: true } } } },
+      },
+      orderBy: { lastWatchedAt: 'desc' },
+      take: limit,
+    });
+
+    res.json(progress);
+  } catch (error) {
+    console.error('Get recent videos error:', error);
+    res.status(500).json({ error: 'Failed to fetch recent videos' });
+  }
+});
+
+// Update / create video progress
+router.post('/', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { videoId, lastPositionSeconds, watchTimeSeconds, completionPercentage } = req.body;
+
     if (!videoId) {
       res.status(400).json({ error: 'Video ID is required' });
       return;
     }
 
-    // Check if video exists
     const video = await prisma.video.findUnique({ where: { id: videoId } });
     if (!video) {
       res.status(404).json({ error: 'Video not found' });
       return;
     }
 
-    // Determine if completed (>= 90% watched)
-    const isCompleted = completionPercentage >= 90;
+    if (config.authDisabled) await ensureSystemUser();
+    const userId = req.user!.id;
+    const isCompleted = (completionPercentage ?? 0) >= 90;
 
-    // Update or create progress
     const progress = await prisma.userProgress.upsert({
-      where: {
-        userId_videoId: {
-          userId,
-          videoId,
-        },
-      },
+      where: { userId_videoId: { userId, videoId } },
       update: {
         lastPositionSeconds: lastPositionSeconds ?? undefined,
         watchTimeSeconds: watchTimeSeconds ?? undefined,
@@ -78,20 +122,14 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
   }
 });
 
-// Get user's progress for a video (no auth required)
-router.get('/:videoId', async (req: Request, res: Response): Promise<void> => {
+// Get progress for a specific video
+router.get('/:videoId', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    await ensureAnonymousUser();
     const { videoId } = req.params;
-    const userId = ANONYMOUS_USER_ID;
+    const userId = req.user!.id;
 
     const progress = await prisma.userProgress.findUnique({
-      where: {
-        userId_videoId: {
-          userId,
-          videoId,
-        },
-      },
+      where: { userId_videoId: { userId, videoId } },
     });
 
     if (!progress) {
@@ -106,34 +144,18 @@ router.get('/:videoId', async (req: Request, res: Response): Promise<void> => {
   }
 });
 
-// Mark video as completed (no auth required)
-router.post('/:videoId/complete', async (req: Request, res: Response): Promise<void> => {
+// Mark video as completed
+router.post('/:videoId/complete', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    await ensureAnonymousUser();
     const { videoId } = req.params;
-    const userId = ANONYMOUS_USER_ID;
+
+    if (config.authDisabled) await ensureSystemUser();
+    const userId = req.user!.id;
 
     const progress = await prisma.userProgress.upsert({
-      where: {
-        userId_videoId: {
-          userId,
-          videoId,
-        },
-      },
-      update: {
-        isCompleted: true,
-        completionPercentage: 100,
-        completedAt: new Date(),
-        lastWatchedAt: new Date(),
-      },
-      create: {
-        userId,
-        videoId,
-        isCompleted: true,
-        completionPercentage: 100,
-        completedAt: new Date(),
-        lastWatchedAt: new Date(),
-      },
+      where: { userId_videoId: { userId, videoId } },
+      update: { isCompleted: true, completionPercentage: 100, completedAt: new Date(), lastWatchedAt: new Date() },
+      create: { userId, videoId, isCompleted: true, completionPercentage: 100, completedAt: new Date(), lastWatchedAt: new Date() },
     });
 
     res.json(progress);
@@ -143,24 +165,15 @@ router.post('/:videoId/complete', async (req: Request, res: Response): Promise<v
   }
 });
 
-// Get all progress for current user (no auth required)
-router.get('/', async (_req: Request, res: Response): Promise<void> => {
+// Get all progress
+router.get('/', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    await ensureAnonymousUser();
-    const userId = ANONYMOUS_USER_ID;
+    const userId = req.user!.id;
 
     const progress = await prisma.userProgress.findMany({
       where: { userId },
       include: {
-        video: {
-          include: {
-            section: {
-              include: {
-                course: true,
-              },
-            },
-          },
-        },
+        video: { include: { section: { include: { course: true } } } },
       },
       orderBy: { lastWatchedAt: 'desc' },
     });
@@ -169,78 +182,6 @@ router.get('/', async (_req: Request, res: Response): Promise<void> => {
   } catch (error) {
     console.error('Get all progress error:', error);
     res.status(500).json({ error: 'Failed to fetch progress' });
-  }
-});
-
-// Get recent videos (no auth required)
-router.get('/recent', async (req: Request, res: Response): Promise<void> => {
-  try {
-    await ensureAnonymousUser();
-    const userId = ANONYMOUS_USER_ID;
-    const limit = parseInt(req.query.limit as string) || 10;
-
-    const progress = await prisma.userProgress.findMany({
-      where: { userId },
-      include: {
-        video: {
-          include: {
-            section: {
-              include: {
-                course: true,
-              },
-            },
-          },
-        },
-      },
-      orderBy: { lastWatchedAt: 'desc' },
-      take: limit,
-    });
-
-    res.json(progress);
-  } catch (error) {
-    console.error('Get recent videos error:', error);
-    res.status(500).json({ error: 'Failed to fetch recent videos' });
-  }
-});
-
-// Get learning statistics (no auth required)
-router.get('/stats', async (_req: Request, res: Response): Promise<void> => {
-  try {
-    await ensureAnonymousUser();
-    const userId = ANONYMOUS_USER_ID;
-
-    const [totalProgress, completedVideos, enrollments] = await Promise.all([
-      prisma.userProgress.count({ where: { userId } }),
-      prisma.userProgress.count({ where: { userId, isCompleted: true } }),
-      prisma.userCourseEnrollment.findMany({
-        where: { userId },
-        include: {
-          course: {
-            include: {
-              _count: {
-                select: { sections: true },
-              },
-            },
-          },
-        },
-      }),
-    ]);
-
-    const totalWatchTime = await prisma.userProgress.aggregate({
-      where: { userId },
-      _sum: { watchTimeSeconds: true },
-    });
-
-    res.json({
-      totalVideosWatched: totalProgress,
-      completedVideos,
-      totalCoursesEnrolled: enrollments.length,
-      completedCourses: enrollments.filter((e: any) => e.isCompleted).length,
-      totalWatchTimeSeconds: totalWatchTime._sum.watchTimeSeconds || 0,
-    });
-  } catch (error) {
-    console.error('Get stats error:', error);
-    res.status(500).json({ error: 'Failed to fetch statistics' });
   }
 });
 

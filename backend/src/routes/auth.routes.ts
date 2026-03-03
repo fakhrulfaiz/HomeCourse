@@ -52,7 +52,7 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
     );
 
     res.status(201).json({
-      user,
+      user: { ...user, preferences: JSON.parse((user as any).preferences ?? '{}') },
       token,
     });
   } catch (error) {
@@ -129,7 +129,7 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response): Promise
       return;
     }
 
-    res.json(user);
+    res.json({ ...user, preferences: JSON.parse((user as any).preferences ?? '{}') });
   } catch (error) {
     console.error('Get user error:', error);
     res.status(500).json({ error: 'Failed to get user' });
@@ -146,7 +146,9 @@ router.put('/me', authenticate, async (req: AuthRequest, res: Response): Promise
       data: {
         ...(fullName && { fullName }),
         ...(avatarUrl !== undefined && { avatarUrl }),
-        ...(preferences && { preferences }),
+        ...(preferences !== undefined && {
+          preferences: typeof preferences === 'string' ? preferences : JSON.stringify(preferences),
+        }),
       },
       select: {
         id: true,
@@ -158,7 +160,7 @@ router.put('/me', authenticate, async (req: AuthRequest, res: Response): Promise
       },
     });
 
-    res.json(user);
+    res.json({ ...user, preferences: JSON.parse((user as any).preferences ?? '{}') });
   } catch (error) {
     console.error('Update user error:', error);
     res.status(500).json({ error: 'Failed to update user' });

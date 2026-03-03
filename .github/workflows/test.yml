@@ -1,0 +1,54 @@
+name: Test
+
+on:
+  push:
+    branches: ["**"]   # every branch
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Push schema to test DB
+        run: npx prisma db push --skip-generate
+        env:
+          DATABASE_URL: file:./test.db
+
+      - name: Run tests with coverage
+        run: npm run test:ci
+        env:
+          DATABASE_URL: file:./test.db
+          JWT_SECRET: test-secret-key-min-32-characters-ok
+          NODE_ENV: test
+          AUTH_DISABLED: "false"
+          VIDEO_DIRS: /tmp/videos
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: backend/coverage/
+          retention-days: 7

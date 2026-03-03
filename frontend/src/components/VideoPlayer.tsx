@@ -175,11 +175,13 @@ export function VideoPlayer({
     if (player && !player.isDisposed() && videoId !== currentVideoIdRef.current) {
       currentVideoIdRef.current = videoId;
 
-      const remoteTracks = player.remoteTextTracks();
+      // video.js TextTrackList has .length and numeric indexing at runtime
+      // but the TS types don't declare them, so we cast via unknown.
+      type TrackArg = Parameters<typeof player.removeRemoteTextTrack>[0];
+      const remoteTracks = player.remoteTextTracks() as unknown as { length: number; [i: number]: TrackArg };
       const trackCount = remoteTracks.length || 0;
       for (let i = trackCount - 1; i >= 0; i--) {
-        const track = remoteTracks[i];
-        if (track) player.removeRemoteTextTrack(track as Parameters<typeof player.removeRemoteTextTrack>[0]);
+        if (remoteTracks[i]) player.removeRemoteTextTrack(remoteTracks[i]);
       }
 
       player.src({ src, type: 'video/mp4' });

@@ -1,4 +1,4 @@
-# Video Learning Platform
+# HomeCourse
 
 A self-hosted video learning platform. Point it at your local video folders and it automatically organises them into courses — no setup needed beyond Docker.
 
@@ -16,16 +16,16 @@ Ships as a **single Docker image** that contains everything: the API, the web UI
 
 ```bash
 docker run -d \
-  --name vlearn \
+  --name homecourse \
   --restart unless-stopped \
   -p 8080:3000 \
-  -v vlearn_data:/data \
+  -v homecourse_data:/data \
   -v /path/to/your/videos:/media/videos:ro \
   -e JWT_SECRET=replace_with_a_long_random_string \
   -e ADMIN_EMAIL=admin@example.com \
   -e ADMIN_PASSWORD=your_password \
   -e VIDEO_DIRS=/media/videos \
-  ghcr.io/YOUR_GITHUB_USERNAME/vlearn:latest
+  ghcr.io/YOUR_GITHUB_USERNAME/homecourse:latest
 ```
 
 Open **http://localhost:8080** and log in with the email and password you set above.
@@ -39,11 +39,11 @@ Open **http://localhost:8080** and log in with the email and password you set ab
 **1. Create a folder and download the compose file:**
 
 ```bash
-mkdir vlearn && cd vlearn
+mkdir homecourse && cd homecourse
 
 # Linux / Mac
-curl -O https://raw.githubusercontent.com/YOUR_GITHUB_USERNAME/video-learning-platform/main/docker-compose.prod.yml
-curl -o .env https://raw.githubusercontent.com/YOUR_GITHUB_USERNAME/video-learning-platform/main/.env.example
+curl -O https://raw.githubusercontent.com/YOUR_GITHUB_USERNAME/HomeCourse/main/docker-compose.prod.yml
+curl -o .env https://raw.githubusercontent.com/YOUR_GITHUB_USERNAME/HomeCourse/main/.env.example
 ```
 
 On Windows, just download both files from the GitHub repository and put them in the same folder.
@@ -157,7 +157,7 @@ docker compose -f docker-compose.prod.yml pull
 docker compose -f docker-compose.prod.yml up -d
 ```
 
-Your data (`vlearn_data` volume) and video files are never touched during an upgrade.
+Your data (`homecourse_data` volume) and video files are never touched during an upgrade.
 
 ---
 
@@ -192,18 +192,18 @@ Your watch progress, enrollments, and accounts are all restored automatically.
 
 ## Backups
 
-All data is in a single SQLite file inside the `vlearn_data` Docker volume.
+All data is in a single SQLite file inside the `homecourse_data` Docker volume.
 
 ```bash
 # Linux / Mac
 docker run --rm \
-  -v vlearn_data:/data \
+  -v homecourse_data:/data \
   -v $(pwd):/backup \
   alpine cp /data/app.db /backup/app.db
 
 # Windows (PowerShell)
 docker run --rm `
-  -v vlearn_data:/data `
+  -v homecourse_data:/data `
   -v ${PWD}:/backup `
   alpine cp /data/app.db /backup/app.db
 ```
@@ -213,8 +213,8 @@ docker run --rm `
 ## Development
 
 ```bash
-git clone https://github.com/YOUR_GITHUB_USERNAME/video-learning-platform.git
-cd video-learning-platform
+git clone https://github.com/YOUR_GITHUB_USERNAME/HomeCourse.git
+cd HomeCourse
 
 cp .env.example .env
 # edit .env for local dev

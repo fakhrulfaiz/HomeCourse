@@ -1,7 +1,7 @@
 {
-  "name": "backend",
+  "name": "homecourse-backend",
   "version": "1.0.0",
-  "description": "Video Learning Platform Backend API",
+  "description": "HomeCourse — self-hosted video learning platform API",
   "main": "dist/index.js",
   "scripts": {
     "dev": "nodemon --exec tsx src/index.ts",

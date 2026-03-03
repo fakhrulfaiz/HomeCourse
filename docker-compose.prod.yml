@@ -1,4 +1,4 @@
-# Video Learning Platform — production docker-compose
+# HomeCourse — production docker-compose
 #
 # QUICK START
 # -----------
@@ -18,9 +18,9 @@
 #     - VIDEO_DIRS=/media/lib1,/media/lib2  ← extend this
 
 services:
-  vlearn:
-    image: ghcr.io/${GITHUB_USERNAME}/vlearn:latest
-    container_name: vlearn
+  homecourse:
+    image: ghcr.io/${GITHUB_USERNAME}/homecourse:latest
+    container_name: homecourse
     restart: unless-stopped
     ports:
       - "${HTTP_PORT:-8080}:3000"

@@ -39,40 +39,59 @@ Open **http://localhost:8080** and log in with the email and password you set ab
 
 ## Install with Docker Compose (recommended)
 
-**1. Create a folder and download the compose file:**
+Create an empty folder anywhere, then create two files inside it:
 
-```bash
-mkdir homecourse && cd homecourse
+**`docker-compose.yml`** — paste this as-is:
 
-# Linux / Mac
-curl -O https://raw.githubusercontent.com/fakhrulfaiz/HomeCourse/main/docker-compose.prod.yml
-curl -o .env https://raw.githubusercontent.com/fakhrulfaiz/HomeCourse/main/.env.example
+```yaml
+services:
+  homecourse:
+    image: ghcr.io/fakhrulfaiz/homecourse:latest
+    container_name: homecourse
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-8080}:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=file:/data/app.db
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}
+      - AUTH_DISABLED=${AUTH_DISABLED:-false}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+      - VIDEO_DIRS=${VIDEO_DIRS:-/media/videos}
+      - ALLOWED_VIDEO_FORMATS=${ALLOWED_VIDEO_FORMATS:-mp4,webm,mkv,avi,mov}
+    volumes:
+      - db_data:/data
+      - ${VIDEO_DIR_1}:/media/videos:ro
+
+volumes:
+  db_data:
 ```
 
-On Windows, just download both files from the GitHub repository and put them in the same folder.
-
-**2. Edit `.env`:**
+**`.env`** — paste this and fill in your values:
 
 ```env
-GITHUB_USERNAME=fakhrulfaiz
-
 JWT_SECRET=replace_with_a_long_random_string
 
 ADMIN_EMAIL=admin@example.com
 ADMIN_PASSWORD=your_password
 
-# Path to your videos on this machine
-VIDEO_DIR_1=C:/Users/me/Videos      # Windows
-# VIDEO_DIR_1=/home/me/videos       # Linux
+# Path to your video folder on this machine
+VIDEO_DIR_1=C:/Users/me/Videos        # Windows
+# VIDEO_DIR_1=/home/me/videos         # Linux / Mac
+
+# Optional — skip login entirely
+# AUTH_DISABLED=true
 ```
 
-**3. Start:**
+**Start:**
 
 ```bash
-docker compose -f docker-compose.prod.yml up -d
+docker compose up -d
 ```
 
-Open **http://localhost:8080**.
+Open **http://localhost:8080** and log in with the email and password you set.
 
 ---
 

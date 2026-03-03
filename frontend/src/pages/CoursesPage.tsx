@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import type { AxiosError } from 'axios';
 import { courseService, dataService, type Course } from '@/services/api.service';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,8 +24,8 @@ export function CoursesPage() {
     try {
       const data = await courseService.getCourses();
       setCourses(data);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to load courses');
+    } catch (err: unknown) {
+      setError((err as AxiosError<{error: string}>).response?.data?.error || 'Failed to load courses');
     } finally {
       setLoading(false);
     }
@@ -36,8 +37,8 @@ export function CoursesPage() {
     setImportResult('');
     try {
       await dataService.exportData();
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Export failed');
+    } catch (err: unknown) {
+      setError((err as AxiosError<{error: string}>).response?.data?.error || 'Export failed');
     } finally {
       setExporting(false);
     }
@@ -63,8 +64,8 @@ export function CoursesPage() {
         .join(', ');
       setImportResult(`Imported: ${summary || 'nothing'}`);
       await loadCourses();
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Import failed');
+    } catch (err: unknown) {
+      setError((err as AxiosError<{error: string}>).response?.data?.error || 'Import failed');
     } finally {
       setImporting(false);
     }
@@ -77,8 +78,8 @@ export function CoursesPage() {
       await courseService.scanVideos();
       // Reload courses after scanning
       await loadCourses();
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to scan videos');
+    } catch (err: unknown) {
+      setError((err as AxiosError<{error: string}>).response?.data?.error || 'Failed to scan videos');
     } finally {
       setScanning(false);
     }

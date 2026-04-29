@@ -11,7 +11,7 @@ HomeCourse is a self-hosted video learning platform for your own machine. You po
 
 ## Requirements
 
-- [Docker](https://docs.docker.com/get-docker/) — that's it.
+- [Docker](https://docs.docker.com/get-docker/) 
 
 ---
 
